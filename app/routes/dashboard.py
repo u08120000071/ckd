@@ -158,6 +158,9 @@ def diagnosis_new(patient_id):
             gender=patient.gender,
             urine_acr=form.urine_acr.data,
             albumin=albumin_val,
+            hypertension=get_optional_select(form.hypertension),
+            diabetes_mellitus=get_optional_select(form.diabetes_mellitus),
+            blood_pressure=form.blood_pressure.data,
         )
 
         # Prepare inputs for ML and LLM models
@@ -293,6 +296,9 @@ def diagnosis_edit(diagnosis_id):
             gender=patient.gender,
             urine_acr=form.urine_acr.data,
             albumin=albumin_val,
+            hypertension=get_optional_select(form.hypertension),
+            diabetes_mellitus=get_optional_select(form.diabetes_mellitus),
+            blood_pressure=form.blood_pressure.data,
         )
 
         ml_input_data = {

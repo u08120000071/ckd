@@ -132,12 +132,36 @@ RECOMMENDATIONS = {
 }
 
 
-def assess_risk(gfr_stage: str, alb_category: str) -> tuple[str, str]:
+def assess_risk(gfr_stage: str, alb_category: str,
+                hypertension: str = None, diabetes_mellitus: str = None,
+                blood_pressure: int = None) -> tuple[str, str]:
     """
-    Return (risk_level, recommendation) based on the KDIGO heat-map.
+    Return (risk_level, recommendation) based on the KDIGO heat-map,
+    with clinical co-morbidity escalation per guideline best practice.
+
+    Active hypertension, diabetes mellitus, or elevated BP (>=140 mmHg)
+    each escalate the baseline KDIGO risk by one tier (capped at Very High).
     """
     col_index = {'A1': 0, 'A2': 1, 'A3': 2}[alb_category]
     risk = RISK_MATRIX[gfr_stage][col_index]
+
+    # Co-morbidity risk escalation
+    risk_tiers = ['Low', 'Moderate', 'High', 'Very High']
+    tier_index = risk_tiers.index(risk)
+
+    escalation = 0
+    if hypertension and hypertension.lower() == 'yes':
+        escalation += 1
+    if diabetes_mellitus and diabetes_mellitus.lower() == 'yes':
+        escalation += 1
+    if blood_pressure is not None and blood_pressure >= 140:
+        escalation += 1
+
+    # Cap escalation: max one tier bump for co-morbidities combined
+    if escalation > 0:
+        tier_index = min(tier_index + 1, len(risk_tiers) - 1)
+
+    risk = risk_tiers[tier_index]
     return risk, RECOMMENDATIONS[risk]
 
 
@@ -146,9 +170,14 @@ def assess_risk(gfr_stage: str, alb_category: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 def run_diagnosis(serum_creatinine: float, age: int, gender: str,
-                  urine_acr: float = None, albumin: int = None) -> dict:
+                  urine_acr: float = None, albumin: int = None,
+                  hypertension: str = None, diabetes_mellitus: str = None,
+                  blood_pressure: int = None) -> dict:
     """
     Run a full CKD diagnosis and return all results as a dict.
+
+    Co-morbidities (hypertension, diabetes, elevated BP) are factored
+    into the final KDIGO risk assessment as clinical escalation modifiers.
     """
     # Estimate urine ACR from dipstick albumin level if ACR is not provided
     if urine_acr is None:
@@ -164,7 +193,12 @@ def run_diagnosis(serum_creatinine: float, age: int, gender: str,
     egfr = calculate_egfr(serum_creatinine, age, gender)
     gfr_stage, gfr_label = classify_gfr_stage(egfr)
     alb_cat, alb_label = classify_albuminuria(urine_acr)
-    risk_level, recommendation = assess_risk(gfr_stage, alb_cat)
+    risk_level, recommendation = assess_risk(
+        gfr_stage, alb_cat,
+        hypertension=hypertension,
+        diabetes_mellitus=diabetes_mellitus,
+        blood_pressure=blood_pressure,
+    )
 
     return {
         'egfr': egfr,
