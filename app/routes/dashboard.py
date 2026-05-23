@@ -7,7 +7,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.models import Patient, Diagnosis
 from app.forms import PatientForm, DiagnosisForm
-from app.diagnosis import run_diagnosis
+from app.diagnosis import run_diagnosis, calibrate_prediction
 from app.ml_model import predict_ckd
 from app.gemini_service import generate_gemini_report
 from app.utils.pdf_generator import generate_diagnosis_pdf
@@ -185,6 +185,15 @@ def diagnosis_new(patient_id):
 
         # Run real-time machine learning prediction & Gemini analysis
         ml_pred, ml_conf = predict_ckd(ml_input_data)
+
+        # Clinical calibration: reconcile ML with KDIGO staging
+        ml_pred, ml_conf = calibrate_prediction(
+            ml_pred, ml_conf,
+            risk_level=results['risk_level'],
+            gfr_stage=results['gfr_stage'],
+            albuminuria_stage=results['albuminuria_stage'],
+        )
+
         gemini_rep = generate_gemini_report(ml_input_data, ml_pred, ml_conf)
 
         diagnosis = Diagnosis(
@@ -321,6 +330,15 @@ def diagnosis_edit(diagnosis_id):
         }
 
         ml_pred, ml_conf = predict_ckd(ml_input_data)
+
+        # Clinical calibration: reconcile ML with KDIGO staging
+        ml_pred, ml_conf = calibrate_prediction(
+            ml_pred, ml_conf,
+            risk_level=results['risk_level'],
+            gfr_stage=results['gfr_stage'],
+            albuminuria_stage=results['albuminuria_stage'],
+        )
+
         gemini_rep = generate_gemini_report(ml_input_data, ml_pred, ml_conf)
 
         # Update existing diagnosis record

@@ -210,3 +210,49 @@ def run_diagnosis(serum_creatinine: float, age: int, gender: str,
         'risk_level': risk_level,
         'recommendation': recommendation,
     }
+
+
+# ---------------------------------------------------------------------------
+# Clinical Calibration — reconcile ML prediction with KDIGO staging
+# ---------------------------------------------------------------------------
+
+def calibrate_prediction(ml_pred: str, ml_conf: float,
+                         risk_level: str, gfr_stage: str,
+                         albuminuria_stage: str) -> tuple[str, float]:
+    """
+    Reconcile the ML Decision Tree prediction with the deterministic
+    KDIGO clinical staging to eliminate contradictions.
+
+    Clinical rationale:
+      - KDIGO staging (eGFR + ACR) is the internationally accepted
+        gold-standard diagnostic criterion for CKD.
+      - The ML model is a screening aid trained on the UCI dataset; its
+        binary classification can disagree with nuanced clinical staging.
+      - When KDIGO evidence clearly indicates kidney disease, the ML
+        prediction is overridden to maintain clinical integrity.
+
+    Override triggers (any one is sufficient):
+      1. KDIGO risk level is Moderate, High, or Very High.
+      2. GFR stage is G3a or worse (eGFR < 60).
+      3. Albuminuria category is A2 or A3 (ACR >= 30 mg/g).
+    """
+    # Define clinical thresholds that confirm CKD
+    elevated_risk = risk_level in ('Moderate', 'High', 'Very High')
+    advanced_gfr = gfr_stage in ('G3a', 'G3b', 'G4', 'G5')
+    significant_albuminuria = albuminuria_stage in ('A2', 'A3')
+
+    needs_override = elevated_risk or advanced_gfr or significant_albuminuria
+
+    if needs_override and ml_pred == 'No CKD Detected':
+        # Override ML prediction to align with clinical evidence
+        ml_pred = 'CKD Detected'
+
+        # Set confidence proportional to the clinical severity
+        if gfr_stage in ('G4', 'G5') or risk_level == 'Very High':
+            ml_conf = 0.98
+        elif gfr_stage in ('G3a', 'G3b') or risk_level == 'High':
+            ml_conf = 0.92
+        else:  # Moderate risk / A2 albuminuria
+            ml_conf = 0.85
+
+    return ml_pred, ml_conf
